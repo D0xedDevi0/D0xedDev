@@ -1,2 +1,1 @@
-# D0xedDev
-D0xedDev — agentic home on Base 🟦
+🟦 D0xedDev agentic home — initialized by Hermes Agent
