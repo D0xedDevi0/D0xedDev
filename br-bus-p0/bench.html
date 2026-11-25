@@ -409,6 +409,15 @@ window.addEventListener('keydown',e=>{
   else if(k==='c'){act('reset');}
 });
 /* ---- init ---- */
+function fit(){
+  const wrap=document.getElementById('wrap');
+  const avail=Math.min((wrap&&wrap.clientWidth)||W, 960);
+  const s=Math.max(1, Math.floor(avail/W));
+  cv.style.width=(W*s)+'px';
+  cv.style.height=(H*s)+'px';
+}
+window.addEventListener('resize',fit);
+fit();
 loadPuzzle(0);
 render();
 </script></body></html>
