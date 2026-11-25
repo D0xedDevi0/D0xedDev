@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BUS.EXE - BENCH (P0)</title>
+<style>
+html,body{margin:0;background:#223239}
+#wrap{max-width:820px;margin:0 auto;padding:10px}
+#c{display:block;width:100%;height:auto;image-rendering:pixelated;image-rendering:crisp-edges;touch-action:manipulation}
+#notes{color:#8CA97A;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;padding:10px 2px}
+#notes b{color:#E3C67E}
+</style></head><body>
+<div id="wrap"><canvas id="c"></canvas>
+<div id="notes"><b>BUS.EXE BENCH P0</b> - deterministic circuit bench. Click a part, then click a cell. <b>R</b> rotates the part in your hand. Right-click a placed part to pull it. <b>ENTER</b> runs the board, <b>N</b> next bench, <b>H</b> hint, <b>C</b> clears. Par is the authored solution length; a repeat solve pays 25% and XP is capped at 24 pads a day. Offline by design: no wallet, no network, no testnet.</div></div>
+<script>
+/* 5x7 uppercase bitmap font - hand-built, no TTF, no anti-aliasing */
+const KEY="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,:-/%$+>()!#=";
+const DATA=".###.#...##...#######...##...##...#####.#...##...#####.#...##...#####..###.#...##....#....#....#...#.###.####.#...##...##...##...##...#####.######....#....####.#....#....###########....#....####.#....#....#.....###.#...##....#.####...##...#.###.#...##...##...#######...##...##...######..#....#....#....#....#..#####..###...#....#....#....#.#..#..##..#...##..#.#.#..##...#.#..#..#.#...##....#....#....#....#....#....######...###.###.#.##...##...##...##...##...###..##.#.##..###...##...##...#.###.#...##...##...##...##...#.###.####.#...##...#####.#....#....#.....###.#...##...##...##.#.##..#..##.#####.#...##...#####.#.#..#..#.#...#.#####....#.....###.....#....#####.#####..#....#....#....#....#....#..#...##...##...##...##...##...#.###.#...##...##...##...##...#.#.#...#..#...##...##...##.#.##.#.###.###...##...##...#.#.#...#...#.#.#...##...##...##...#.#.#...#....#....#....#..#####....#...#...#...#...#....#####.##..#..#.#..#.#..#.#..#.#..#..##....#...##....#....#....#....#...###..###.#...#....#...#...#...#...##########...#...#.....#.....##...#.###....#...##..#.#.#..#.#####...#....#.######....####.....#....##...#.###...##..#...#....####.#...##...#.###.#####....#...#...#...#....#....#....###.#...##...#.###.#...##...#.###..###.#...##...#.####....#...#..##...............................................................##...##.......................##...##...#.........##...##........##...##......................#####...................#...#....#...#...#....#...#....##..###.#...#...#...#..##..###.......#...#####.#...###...#.#####...#.........#....#..#####..#....#.......#.....#.....#.....#...#...#...#......#...#...#....#....#.....#.....#....#.....#.....#....#....#...#...#....#....#....#....#....#.........#...#.#.#####.#.#..#.#.#####.#.#...........#####.....#####...............";
+const FONT={};
+for(let i=0;i<KEY.length;i++)FONT[KEY[i]]=DATA.substr(i*35,35);
+const GW=5,GH=7,GAP=1;
+/* ---- palette: sampled live from Base Rooms (see ART_BIBLE.md) ---- */
+const P={grass:'#A5C88A',grassHi:'#C5DAAB',grassDk:'#8CA97A',grassSh:'#659274',foliage:'#2F6E4C',foliageDk:'#295444',
+pcb:'#356B4E',path:'#E0D6BF',stone:'#BDB4A6',wood:'#7A5A3E',woodDk:'#58493D',woodHi:'#8F6640',
+gold:'#E3C67E',goldDk:'#A0854D',blue:'#3D74F0',blueHi:'#6F96ED',blueDk:'#3358B6',white:'#EEEBE4',
+ink:'#223239',red:'#EF3E3E',orange:'#FF7A1A',green:'#00B875',desk:'#F5F4EF',gr:'#DDE6F5',
+panel:'#EFEEE9',border:'#D0D0D0',bar:'#F7F7F4',tbar:'#2F6DF6',menu:'#F2F1EC',grey:'#5C6470'};
+/* ---- layout, logical pixels ---- */
+const W=480,H=300;
+const WX=6,WY=6,WW=468,WH=288;
+const CELL=16,COLS=16,ROWS=10,BX=114,BY=52;
+const BW=COLS*CELL,BH=ROWS*CELL;
+const BINX=8,BINY=36,BINW=96;
+const PANX=380,PANW=92,PANY=36;
+const SBY=268;
+const cv=document.getElementById('c');
+cv.width=W;cv.height=H;
+cv.style.width='100%';cv.style.height='auto';
+const g=cv.getContext('2d');
+g.imageSmoothingEnabled=false;
+function r(x,y,w,h,c){g.fillStyle=c;g.fillRect(x|0,y|0,Math.max(0,w|0),Math.max(0,h|0));}
+function box(x,y,w,h,c,o){r(x,y,w,h,c);g.strokeStyle=o||P.ink;g.lineWidth=1;g.strokeRect(x+.5,y+.5,w-1,h-1);}
+function ink(x,y,w,h,c){g.fillStyle=c;g.fillRect(x|0,y|0,w|0,h|0);}
+/* ---- 5x7 bitmap text ---- */
+function ptext(x,y,s,c,sc){
+  sc=sc||1;c=c||P.ink;s=(''+s).toUpperCase();
+  g.fillStyle=c;
+  for(let i=0;i<s.length;i++){
+    const d=FONT[s[i]]||FONT['?']||FONT[' '];
+    for(let ry=0;ry<GH;ry++)for(let rx=0;rx<GW;rx++){
+      if(d[ry*GW+rx]==='#'){
+        g.fillRect(x+(i*(GW+GAP)+rx)*sc,y+ry*sc,sc,sc);
+      }
+    }
+  }
+}
+function tw(s){return (''+s).length*(GW+GAP)-GAP;}
+function ptextc(x,y,w,s,c,sc){ptext(x+((w-tw(s)*1)>>1),y,s,c,sc);}
+/* ---- doodads ---- */
+function grassPatch(x,y,w,h,seed){
+  r(x,y,w,h,P.grass);
+  let s=seed||7;
+  const rnd=()=>((s=(s*1103515245+12345)&0x7fffffff)/0x7fffffff);
+  for(let i=0;i<w*h/26;i++){
+    const px=x+rnd()*w|0,py=y+rnd()*h|0;
+    r(px,py,1,1,rnd()<.55?P.grassHi:P.grassDk);
+  }
+}
+//<LOGIC>
+/* ---- circuit model. deterministic: same board in => same verdict out, no RNG ---- */
+const NV={W:[-1,0],E:[1,0],N:[0,-1],S:[0,1]};
+const OPP={W:'E',E:'W',N:'S',S:'N'};
+const CW={N:'E',E:'S',S:'W',W:'N'};
+const BIT={W:1,E:2,N:4,S:8};
+const BASE={WIRE:['W','E','N','S'],SPLIT:['W','E','S'],RES:['W','E'],FUSE:['W','E'],RELAY:['W','E','N'],SENSOR:['W','E','N','S'],SRC:['E'],BLOCK:[]};
+const PLACEABLE=['WIRE','SPLIT','RES','FUSE','RELAY'];
+const NAMES={WIRE:'WIRE',SPLIT:'SPLITTER',RES:'RESISTOR',FUSE:'FUSE',RELAY:'RELAY',SENSOR:'SENSOR',SRC:'SOURCE',BLOCK:'ROCK'};
+const PCOL={WIRE:'stone',SPLIT:'orange',RES:'gold',FUSE:'red',RELAY:'green',SENSOR:'blue',SRC:'gold',BLOCK:'woodDk'};
+function piece(t,rot){
+  rot=(((rot|0)%4)+4)%4;
+  const order=[],pins={};
+  for(const d of (BASE[t]||[])){let q=d;for(let i=0;i<rot;i++)q=CW[q];order.push(q);pins[q]=1;}
+  return {order:order,pins:pins};
+}
+function emptyGrid(){const bd=[];for(let y=0;y<ROWS;y++)bd.push(new Array(COLS).fill(null));return bd;}
+function cellAt(bd,x,y){return (x>=0&&y>=0&&x<COLS&&y<ROWS)?bd[y][x]:null;}
+/* monotone relaxation. kind: 0=conduct, 1=RESISTOR (one way), 2=RELAY (needs control) */
+function fixpoint(bd,pieces,fuse){
+  const mask=[];for(let y=0;y<ROWS;y++)mask.push(new Array(COLS).fill(0));
+  const ext=[];
+  for(let y=0;y<ROWS;y++){ext.push(new Array(COLS).fill(null));}
+  const cap=ROWS*COLS+16;
+  for(let pass=0;pass<cap;pass++){
+    let changed=false;
+    for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+      const c=bd[y][x],pi=pieces[y][x];if(!pi){ext[y][x]=null;continue;}
+      const ex=[];
+      for(const d in pi.pins){
+        const nx=x+NV[d][0],ny=y+NV[d][1],n=cellAt(bd,nx,ny);
+        if(!n||!n.t||n.t==='BLOCK')continue;
+        const np=pieces[ny][nx];
+        if(!np||!np.pins[OPP[d]])continue;
+        if(mask[ny][nx]&BIT[OPP[d]])ex.push(d);
+      }
+      ext[y][x]=ex;
+      const o=pi.order,t=c.t;let add=0;
+      if(t==='SRC')add|=BIT[o[0]];
+      else if(t==='WIRE'||t==='SPLIT'){if(ex.length)for(const d in pi.pins)add|=BIT[d];}
+      else if(t==='SENSOR'){if(ex.length)add|=BIT[ex[0]];}
+      else if(t==='RES'){if(ex.indexOf(o[0])>=0)add|=BIT[o[1]];}
+      else if(t==='FUSE'){const st=fuse[y+','+x];if(st===1&&ex.indexOf(o[0])>=0)add|=BIT[o[1]];else if(st===-1&&ex.indexOf(o[1])>=0)add|=BIT[o[0]];}
+      else if(t==='RELAY'){if(ex.indexOf(o[0])>=0&&ex.indexOf(o[2])>=0)add|=BIT[o[1]];}
+      if((mask[y][x]|add)!==mask[y][x]){mask[y][x]|=add;changed=true;}
+    }
+    if(!changed)break;
+  }
+  return {mask:mask,ext:ext};
+}
+/* evaluate(bd) -> {mask,lit,sensors,powered,blown,reversed,noCtl} */
+function evaluate(bd){
+  const pieces=[],fuse={},blown=[],reversed=[],noCtl=[];
+  for(let y=0;y<ROWS;y++){pieces.push([]);for(let x=0;x<COLS;x++){const c=bd[y][x];pieces[y].push((c&&c.t&&c.t!=='BLOCK')?piece(c.t,c.rot):null);}}
+  /* pass 1: fuses do not conduct. any side powered now is powered from OUTSIDE the fuse */
+  const pre=fixpoint(bd,pieces,{});
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const c=bd[y][x];if(!c||c.t!=='FUSE')continue;
+    const o=pieces[y][x].order,ex=pre.ext[y][x]||[];
+    const a=ex.indexOf(o[0])>=0,b=ex.indexOf(o[1])>=0;
+    if(a&&b){fuse[y+','+x]=0;blown.push([x,y]);}
+    else if(a)fuse[y+','+x]=1;
+    else if(b)fuse[y+','+x]=-1;
+    else fuse[y+','+x]=0;
+  }
+  /* pass 2: a fuse that was fed from exactly one side now conducts that way */
+  const fin=fixpoint(bd,pieces,fuse),mask=fin.mask;
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const c=bd[y][x];if(!c||!c.t)continue;
+    const pi=pieces[y][x];if(!pi)continue;
+    const ex=fin.ext[y][x]||[],o=pi.order;
+    if(c.t==='RES'&&ex.indexOf(o[1])>=0&&ex.indexOf(o[0])<0)reversed.push([x,y]);
+    if(c.t==='RELAY'&&ex.indexOf(o[0])>=0&&ex.indexOf(o[2])<0)noCtl.push([x,y]);
+  }
+  let sensors=0,lit=0,powered=0;
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const c=bd[y][x];if(!c||!c.t)continue;
+    if(mask[y][x])powered++;
+    if(c.t==='SENSOR'){sensors++;if(mask[y][x])lit++;}
+  }
+  return {mask:mask,lit:lit,sensors:sensors,powered:powered,blown:blown,reversed:reversed,noCtl:noCtl};
+}
+//</LOGIC>
+/* ---- the eight benches. src rot encodes its output dir: 0=E 1=S 2=W 3=N ---- */
+const PUZZLES=[
+{name:'FIRST CONTACT',teach:'PLACE WIRE FROM SOURCE TO SENSOR',
+ fixed:[['SRC',1,5,0],['SENSOR',11,5,0]],bin:{WIRE:12},
+ sol:[['WIRE',2,5,0],['WIRE',3,5,0],['WIRE',4,5,0],['WIRE',5,5,0],['WIRE',6,5,0],['WIRE',7,5,0],['WIRE',8,5,0],['WIRE',9,5,0],['WIRE',10,5,0]]},
+{name:'AROUND THE ROCK',teach:'THE ROAD BENDS. WIRE AROUND IT',
+ fixed:[['SRC',1,5,0],['SENSOR',12,5,0],['BLOCK',5,4,0],['BLOCK',5,5,0],['BLOCK',5,6,0],['BLOCK',6,4,0],['BLOCK',6,5,0],['BLOCK',6,6,0]],bin:{WIRE:16},
+ sol:[['WIRE',2,5,0],['WIRE',3,5,0],['WIRE',4,5,0],['WIRE',4,4,0],['WIRE',4,3,0],['WIRE',5,3,0],['WIRE',6,3,0],['WIRE',7,3,0],['WIRE',7,4,0],['WIRE',7,5,0],['WIRE',8,5,0],['WIRE',9,5,0],['WIRE',10,5,0],['WIRE',11,5,0]]},
+{name:'ONE WAY STREET',teach:'THE RESISTOR ONLY PASSES LEFT TO RIGHT. PRESS R',
+ fixed:[['SRC',1,4,0],['SENSOR',13,4,0]],bin:{WIRE:14,RES:1},
+ sol:[['WIRE',2,4,0],['WIRE',3,4,0],['WIRE',4,4,0],['WIRE',5,4,0],['RES',6,4,0],['WIRE',7,4,0],['WIRE',8,4,0],['WIRE',9,4,0],['WIRE',10,4,0],['WIRE',11,4,0],['WIRE',12,4,0]]},
+{name:'BACKWARDS',teach:'THE SOURCE IS ON THE RIGHT. TURN THE RESISTOR AROUND',
+ fixed:[['SRC',13,4,2],['SENSOR',1,4,0]],bin:{WIRE:14,RES:1},
+ sol:[['WIRE',12,4,0],['WIRE',11,4,0],['WIRE',10,4,0],['WIRE',9,4,0],['WIRE',8,4,0],['WIRE',7,4,0],['RES',6,4,2],['WIRE',5,4,0],['WIRE',4,4,0],['WIRE',3,4,0],['WIRE',2,4,0]]},
+{name:'DOUBLE TAP',teach:'SPLITTER AT 90: FEED FROM THE LEFT, LIGHT BOTH SENSORS',
+ fixed:[['SRC',1,4,0],['SENSOR',7,1,0],['SENSOR',7,7,0]],bin:{WIRE:12,SPLIT:1},
+ sol:[['WIRE',2,4,0],['WIRE',3,4,0],['WIRE',4,4,0],['WIRE',5,4,0],['WIRE',6,4,0],['SPLIT',7,4,1],['WIRE',7,3,0],['WIRE',7,2,0],['WIRE',7,5,0],['WIRE',7,6,0]]},
+{name:'DONT WRAP YOUR OWN FUSE',teach:'FEED THE FUSE FROM ONE SIDE ONLY',
+ fixed:[['SRC',1,4,0],['SENSOR',13,4,0],['WIRE',3,3,0],['BLOCK',8,4,0],['BLOCK',9,4,0],['BLOCK',10,4,0]],bin:{WIRE:14,FUSE:1},
+ sol:[['WIRE',2,4,0],['WIRE',3,4,0],['FUSE',4,4,0],['WIRE',5,4,0],['WIRE',6,4,0],['WIRE',7,4,0],['WIRE',7,3,0],['WIRE',8,3,0],['WIRE',9,3,0],['WIRE',10,3,0],['WIRE',11,3,0],['WIRE',11,4,0],['WIRE',12,4,0]]},
+{name:'TWO HANDS',teach:'THE RELAY NEEDS A SECOND FEED ON ITS CONTROL PIN',
+ fixed:[['SRC',1,4,0],['SRC',8,1,1],['SENSOR',13,4,0]],bin:{WIRE:14,RELAY:1},
+ sol:[['WIRE',2,4,0],['WIRE',3,4,0],['WIRE',4,4,0],['WIRE',5,4,0],['WIRE',6,4,0],['WIRE',7,4,0],['RELAY',8,4,0],['WIRE',9,4,0],['WIRE',10,4,0],['WIRE',11,4,0],['WIRE',12,4,0],['WIRE',8,2,0],['WIRE',8,3,0]]},
+{name:'THE BUS',teach:'EVERY PART ONE BOARD. RESISTOR IN, SPLITTER, FUSE AND RELAY OUT',
+ fixed:[['SRC',1,4,0],['SRC',11,2,1],['SENSOR',13,1,0],['SENSOR',13,6,0]],bin:{WIRE:22,RES:1,SPLIT:1,FUSE:1,RELAY:1},
+ sol:[['WIRE',2,4,0],['WIRE',3,4,0],['WIRE',4,4,0],['WIRE',5,4,0],['RES',6,4,0],['WIRE',7,4,0],['SPLIT',8,4,1],
+      ['WIRE',8,3,0],['WIRE',8,2,0],['WIRE',8,1,0],['WIRE',9,1,0],['WIRE',10,1,0],['WIRE',11,1,0],['WIRE',12,1,0],
+      ['WIRE',8,5,0],['WIRE',8,6,0],['FUSE',9,6,0],['WIRE',10,6,0],['RELAY',11,6,0],['WIRE',12,6,0],
+      ['WIRE',11,3,0],['WIRE',11,4,0],['WIRE',11,5,0]]}];
+/* ---- bench state ---- */
+let idx=0,mine=[],sel='WIRE',rotSel=0,last=null,hint=false,xp=0,showPar=false,flash=0;
+const SAVE='busexe.bench.p0';
+let store={xp:0,solved:{}};
+try{const s=localStorage.getItem(SAVE);if(s)store=JSON.parse(s);}catch(e){}
+xp=store.xp||0;
+function save(){try{localStorage.setItem(SAVE,JSON.stringify(store));}catch(e){}}
+function puzzle(){return PUZZLES[idx];}
+function par(){return PUZZLES[idx].sol.length;}
+function loadPuzzle(i){
+  idx=((i%PUZZLES.length)+PUZZLES.length)%PUZZLES.length;
+  mine=[];last=null;hint=false;showPar=false;flash=0;
+  runRound(true);
+}
+function gridNow(){
+  const bd=emptyGrid(),p=puzzle();
+  for(const f of p.fixed)bd[f[2]][f[1]]={t:f[0],rot:f[3]||0,fixed:true};
+  for(const m of mine)if(!bd[m[2]][m[1]])bd[m[2]][m[1]]={t:m[0],rot:m[3]||0,mine:true};
+  return bd;
+}
+function remaining(t){let n=puzzle().bin[t]||0;for(const m of mine)if(m[0]===t)n--;return n;}
+function msg(s){last={msg:s,res:null,solved:false,par:par(),gained:0};}
+function placeAt(cx,cy){
+  const p=puzzle();
+  for(const f of p.fixed)if(f[1]===cx&&f[2]===cy)return msg('THAT CELL IS PART OF THE BOARD');
+  const ex=mine.findIndex(m=>m[1]===cx&&m[2]===cy);
+  if(ex>=0){mine.splice(ex,1);return runRound();}
+  if(!sel)return msg('PICK A PART FROM THE BIN');
+  if(remaining(sel)<=0)return msg('OUT OF '+NAMES[sel]+' - CLICK A PLACED ONE TO REMOVE');
+  mine.push([sel,cx,cy,rotSel]);
+  runRound();
+}
+function cycles(){
+  const bd=gridNow(),res=evaluate(bd),p=puzzle();
+  let m='';
+  if(res.blown.length)m='FUSE AT '+res.blown[0][0]+','+res.blown[0][1]+' BLEW - DOUBLE FEED. FEED IT FROM ONE SIDE';
+  else if(res.reversed.length)m='RESISTOR AT '+res.reversed[0][0]+','+res.reversed[0][1]+' REVERSED - PRESS R';
+  else if(res.noCtl.length)m='RELAY AT '+res.noCtl[0][0]+','+res.noCtl[0][1]+' OPEN - NO CONTROL INPUT';
+  else if(res.sensors>0&&res.lit>=res.sensors)m='ALL '+res.sensors+' SENSORS LIT - BOARD SOLVED';
+  else if(res.powered<=1)m='NO CURRENT LEAVING THE SOURCE';
+  else m='POWERED '+res.powered+' CELLS - '+res.lit+'/'+res.sensors+' SENSORS LIT';
+  return {res:res,text:m,solved:(res.sensors>0&&res.lit>=res.sensors)};
+}
+function stars(){const d=Math.max(0,mine.length-par());return d===0?3:d<=2?2:1;}
+function runRound(quiet){
+  const c=cycles(),p=puzzle();let gained=0,txt=c.text;
+  if(c.solved&&!quiet){
+    const st=stars();
+    gained=Math.min(mine.length,24)+(10+5*st);
+    if(!hint)gained=Math.round(gained*1.5);
+    const key='p'+idx;
+    if(store.solved[key]){gained=Math.max(1,Math.round(gained*0.25));txt+=' - REPEAT: 25% XP';}
+    else if(mine.length===p.sol.length&&!hint)txt+=' - PAR EXACT, NO HINT: 1.5X';
+    else if(hint)txt+=' - HINT USED';
+    store.solved[key]=1;store.xp=(store.xp||0)+gained;xp=store.xp;save();
+    txt+=' +'+gained+' XP';flash=Date.now();
+  }
+  last={msg:txt,res:c.res,solved:c.solved,par:p.sol.length,gained:gained};
+  return last;
+}
+function useHint(){hint=true;showPar=true;last=null;}
+/* ---- renderer ---- */
+const BTNS=[];
+function btn(id,x,y,w,h,c,label,tc){
+  BTNS.push({id:id,x:x,y:y,w:w,h:h});
+  box(x,y,w,h,c,c==='tbar'?P.tbar:(P[c]?P[c]:c));
+  if(label)ptextc(x,y+((h-GH)>>1),w,label,tc||'white');
+}
+function wrap(s,n){const out=[];let cur='';for(const w of (''+s).split(' ')){if((cur+' '+w).trim().length>n){out.push(cur.trim());cur=w;}else cur+=' '+w;}if(cur.trim())out.push(cur.trim());return out;}
+function drawPart(x,y,t,rot,powered){
+  const px=x+2,py=y+2,S=12;
+  const c=P[PCOL[t]]||P.stone;
+  if(t==='BLOCK'){r(x+1,y+1,14,14,P.woodDk);r(x+3,y+3,10,10,P.wood);r(x+4,y+4,3,3,P.woodHi);return;}
+  if(t==='SRC'){r(px,py,S,S,P.goldDk);r(px+1,py+1,S-2,S-2,P.gold);r(px+4,py+4,4,4,P.ink);r(px+8,py-1,2,3,P.red);return;}
+  if(t==='SENSOR'){r(px,py,S,S,P.blueDk);r(px+1,py+1,S-2,S-2,P.blue);r(px+3,py+3,6,6,P.white);r(px+4,py+4,4,4,powered?P.green:P.ink);return;}
+  r(px,py,S,S,P.ink);r(px+1,py+1,S-2,S-2,c);
+  const pi=piece(t,rot);
+  if(t==='WIRE'){r(px+4,py+4,4,4,P.white);}
+  else if(t==='SPLIT'){r(px+4,py+4,4,4,P.ink);r(px+5,py+5,2,2,P.white);}
+  else if(t==='RES'){r(px+2,py+5,8,2,P.ink);r(px+3,py+3,2,2,P.ink);r(px+7,py+7,2,2,P.ink);}
+  else if(t==='FUSE'){r(px+2,py+5,3,2,P.ink);r(px+7,py+5,3,2,P.ink);r(px+5,py+3,2,6,P.white);}
+  else if(t==='RELAY'){r(px+2,py+5,8,2,P.ink);r(px+4,py+2,4,2,P.white);}
+  for(const d in pi.pins){
+    const on=powered&&(powered&BIT[d]);
+    const cc=on?P.white:P.ink;
+    if(d==='W')r(x-1,y+7,3,2,cc);
+    if(d==='E')r(x+14,y+7,3,2,cc);
+    if(d==='N')r(x+7,y-1,2,3,cc);
+    if(d==='S')r(x+7,y+14,2,3,cc);
+  }
+}
+function buddy(x,y,body,arm){
+  r(x+1,y+20,16,4,P.grassSh);
+  r(x+4,y+2,10,11,P.ink);r(x+5,y+3,8,9,P[body]);
+  r(x+6,y+5,6,6,P.white);r(x+7,y+6,1,2,P.ink);r(x+10,y+6,1,2,P.ink);r(x+8,y+9,3,1,P.ink);
+  r(x+8,y,1,2,P.ink);r(x+8,y-1,1,1,P.gold);
+  r(x+4,y+13,10,2,P.ink);r(x+5,y+15,8,5,P[body]);r(x+6,y+15,6,1,P.blueHi);
+  r(x+3,y+16,1,3,P.ink);r(x+14,y+16,1,3,P.ink);
+  if(arm)r(x+15,y+13,3,1,P.ink);
+}
+function render(){
+  BTNS.length=0;
+  r(0,0,W,H,P.desk);
+  for(let x=0;x<W;x+=12)r(x,0,1,H,P.gr);
+  for(let y=0;y<H;y+=12)r(0,y,W,1,P.gr);
+  r(WX+3,WY+3,WW,WH,P.grassSh);
+  box(WX,WY,WW,WH,P.white,P.border);
+  const solved=last&&last.solved;
+  r(WX+1,WY+1,WW-2,14,solved?P.gold:P.menu);
+  r(WX+1,WY+15,WW-2,12,P.menu);
+  ptext(WX+5,WY+5,'BUS.EXE  C:/BRTC/GAMES',P.ink);
+  for(let i=0;i<3;i++){const bx=WX+WW-17-i*13;box(bx,WY+4,10,9,i===2?P.red:(i===0?P.green:P.panel),P.border);}
+  ptext(WX+5,WY+18,'FILE   EDIT   RUN   HELP',P.ink);
+  ptext(WX+200,WY+18,'TEST MODE  NO WALLET',P.grey);
+  ptext(WX+WW-92,WY+18,'SOLVED '+Object.keys(store.solved||{}).length+'/8',P.green);
+  /* parts bin */
+  r(BINX,BINY,BINW,WH-42,P.panel);r(BINX+BINW,BINY,1,WH-42,P.border);
+  ptext(BINX+4,BINY+4,'PARTS BIN',P.ink);
+  PLACEABLE.forEach((t,i)=>{
+    const by=BINY+18+i*24,on=(sel===t),left=remaining(t);
+    if(on)box(BINX+2,by-2,BINW-4,22,P.gold,P.goldDk);
+    drawPart(BINX+6,by,t,0,0);
+    ptext(BINX+24,by+4,NAMES[t],left?P.ink:P.grey);
+    ptext(BINX+BINW-20,by+4,'X'+(left<0?0:left),left?P.wood:P.grey);
+  });
+  ptext(BINX+4,BINY+146,'ROTATION',P.grey);ptext(BINX+4,BINY+156,'R KEY',P.ink);
+  ptext(BINX+4,BINY+176,'PARTS USED',P.grey);ptext(BINX+4,BINY+186,''+mine.length+' / PAR '+par(),P.ink);
+  /* board */
+  grassPatch(BX-6,BY-6,BW+12,BH+12,11);
+  const bd=gridNow(),res=(last&&last.res)?last.res:evaluate(bd);
+  const pw=(res&&res.mask)?res.mask:null;
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const cx=BX+x*CELL,cy=BY+y*CELL;
+    if((x+y)%2)r(cx,cy,CELL,CELL,'rgba(0,0,0,0.03)');
+    r(cx,cy,1,1,P.grassSh);
+    const c=bd[y][x];
+    if(!c&&showPar&&puzzle().sol.some(m=>m[1]===x&&m[2]===y))r(cx+6,cy+6,4,4,P.goldDk);
+    if(c)drawPart(cx,cy,c.t,c.rot||0,pw?pw[y][x]:0);
+  }
+  /* bench strip */
+  r(BX-6,BY+BH+6,BW+12,40,P.grass);
+  r(BX+4,BY+BH+22,120,7,P.woodDk);r(BX+6,BY+BH+24,116,3,P.wood);
+  buddy(BX+12,BY+BH+2,'blue',1);buddy(BX+40,BY+BH+4,'gold',0);
+  ptext(BX+70,BY+BH+14,puzzle().name,P.ink);
+  const lit=(res&&res.lit)||0,sen=(res&&res.sensors)||0;
+  ptext(BX+70,BY+BH+26,'SENSORS '+lit+'/'+sen+(last&&last.solved?'  - SOLVED':'') ,last&&last.solved?P.green:P.wood);
+  /* panel */
+  r(PANX,PANY,PANW,WH-42,P.panel);r(PANX-1,PANY,1,WH-42,P.border);
+  const tm=wrap(puzzle().teach,14);
+  box(PANX+4,PANY+4,PANW-8,18+tm.length*9,P.white,P.border);
+  ptext(PANX+8,PANY+8,'GOAL',P.ink);
+  tm.forEach((line,i)=>ptext(PANX+8,PANY+20+i*9,line,P.wood));
+  let yy=PANY+30+tm.length*9;
+  box(PANX+4,yy,PANW-8,26,P.white,P.border);
+  ptext(PANX+8,yy+6,'PARTS '+mine.length,P.ink);
+  r(PANX+8,yy+16,PANW-24,6,P.panel);
+  const frac=Math.min(1,par()/Math.max(1,mine.length));
+  r(PANX+8,yy+16,Math.max(2,(PANW-24)*frac|0),6,frac>=1?P.green:P.goldDk);
+  yy+=34;
+  btn('run',PANX+4,yy,PANW-8,22,'tbar','RUN');
+  yy+=26;
+  btn('hint',PANX+4,yy,(PANW-8)/2-2,18,'gold','HINT','ink');
+  btn('next',PANX+4+(PANW-8)/2+2,yy,(PANW-8)/2-2,18,'panel','NEXT','ink');
+  yy+=22;
+  btn('reset',PANX+4,yy,PANW-8,16,'panel','CLEAR BOARD','ink');
+  ptext(PANX+6,PANY+164,'XP '+xp,P.ink);
+  ptext(PANX+6,PANY+176,'PAR '+par()+' PARTS',P.wood);
+  ptext(PANX+6,PANY+188,'BENCH '+(idx+1)+' OF 8',P.wood);
+  ptext(PANX+6,PANY+204,'CARE CAP 24',P.grey);
+  ptext(PANX+6,PANY+214,'XP PER DAY',P.grey);
+  /* status */
+  r(WX+2,SBY,WW-4,22,P.panel);r(WX+2,SBY,WW-4,1,P.border);
+  const line=last?last.msg:'CLICK A PART, THEN CLICK THE GRID. PRESS RUN.';
+  ptext(WX+8,SBY+4,line.slice(0,74),last&&last.solved?P.green:P.ink);
+  ptext(WX+8,SBY+13,sel?('HOLDING '+NAMES[sel]+' ROT '+rotSel*90+' DEG'):'NOTHING IN HAND',P.grey);
+}
+/* ---- selftest: every authored solution must solve, inside its bin ---- */
+function selftest(){
+  const out=[];
+  for(let i=0;i<PUZZLES.length;i++){
+    const p=PUZZLES[i];
+    const bd=emptyGrid();
+    for(const f of p.fixed)bd[f[2]][f[1]]={t:f[0],rot:f[3]||0,fixed:true};
+    for(const m of p.sol)bd[m[2]][m[1]]={t:m[0],rot:m[3]||0,mine:true};
+    const res=evaluate(bd);
+    const used={};for(const m of p.sol)used[m[0]]=(used[m[0]]||0)+1;
+    const over=[];for(const k in used)if(used[k]>(p.bin[k]||0))over.push(k+':'+used[k]+'>'+(p.bin[k]||0));
+    const dup=[];const seen={};
+    for(const m of p.sol){const k=m[1]+','+m[2];if(seen[k])dup.push(k);seen[k]=1;}
+    const ok=(res.sensors>0&&res.lit>=res.sensors)&&over.length===0&&dup.length===0;
+    out.push({i:i+1,name:p.name,par:p.sol.length,lit:res.lit,sensors:res.sensors,powered:res.powered,blown:res.blown.length,over:over,dup:dup,ok:ok});
+  }
+  return out;
+}
+/* ---- input ---- */
+function toLocal(ev){
+  const b=cv.getBoundingClientRect();
+  return {x:Math.floor((ev.clientX-b.left)*(W/b.width)),y:Math.floor((ev.clientY-b.top)*(H/b.height))};
+}
+function act(id){
+  if(id==='run'){last=null;runRound();}
+  else if(id==='hint')useHint();
+  else if(id==='next')loadPuzzle(idx+1);
+  else if(id==='reset'){mine=[];last=null;runRound(true);}
+  render();
+}
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('pointerdown',ev=>{
+  const p=toLocal(ev);
+  for(const b of BTNS)if(p.x>=b.x&&p.x<b.x+b.w&&p.y>=b.y&&p.y<b.y+b.h){act(b.id);return;}
+  for(let i=0;i<PLACEABLE.length;i++){
+    const by=BINY+18+i*24;
+    if(p.x>=BINX&&p.x<BINX+BINW&&p.y>=by-2&&p.y<by+20){sel=PLACEABLE[i];rotSel=0;last=null;render();return;}
+  }
+  if(p.x>=BX&&p.x<BX+BW&&p.y>=BY&&p.y<BY+BH){
+    const cx=Math.floor((p.x-BX)/CELL),cy=Math.floor((p.y-BY)/CELL);
+    const i=mine.findIndex(m=>m[1]===cx&&m[2]===cy);
+    if(i>=0&&(ev.button===2||!sel)){mine.splice(i,1);last=null;runRound();}
+    else placeAt(cx,cy);
+    render();return;
+  }
+  render();
+});
+window.addEventListener('keydown',e=>{
+  const k=(e.key||'').toLowerCase();
+  if(k==='r'){rotSel=(rotSel+1)%4;last=null;render();}
+  else if(k==='enter'){act('run');}
+  else if(k==='h'){act('hint');}
+  else if(k==='n'){act('next');}
+  else if(k==='c'){act('reset');}
+});
+/* ---- init ---- */
+loadPuzzle(0);
+render();
+</script></body></html>
