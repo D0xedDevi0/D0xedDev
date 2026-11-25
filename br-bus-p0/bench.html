@@ -243,8 +243,10 @@ function useHint(){hint=true;showPar=true;last=null;}
 const BTNS=[];
 function btn(id,x,y,w,h,c,label,tc){
   BTNS.push({id:id,x:x,y:y,w:w,h:h});
-  box(x,y,w,h,c,c==='tbar'?P.tbar:(P[c]?P[c]:c));
-  if(label)ptextc(x,y+((h-GH)>>1),w,label,tc||'white');
+  const fill=(c==='tbar')?P.tbar:(P[c]||c);
+  const edge=(c==='tbar')?P.blueDk:(P[c+'Dk']||P.border);
+  box(x,y,w,h,fill,edge);
+  if(label)ptextc(x,y+((h-GH)>>1),w,label,tc==='ink'?P.ink:(tc?P[tc]:P.white));
 }
 function wrap(s,n){const out=[];let cur='';for(const w of (''+s).split(' ')){if((cur+' '+w).trim().length>n){out.push(cur.trim());cur=w;}else cur+=' '+w;}if(cur.trim())out.push(cur.trim());return out;}
 function drawPart(x,y,t,rot,powered){
