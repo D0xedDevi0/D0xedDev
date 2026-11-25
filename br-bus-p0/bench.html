@@ -218,7 +218,8 @@ function cycles(){
   else if(res.sensors>0&&res.lit>=res.sensors)m='ALL '+res.sensors+' SENSORS LIT - BOARD SOLVED';
   else if(res.powered<=1)m='NO CURRENT LEAVING THE SOURCE';
   else m='POWERED '+res.powered+' CELLS - '+res.lit+'/'+res.sensors+' SENSORS LIT';
-  return {res:res,text:m,solved:(res.sensors>0&&res.lit>=res.sensors)};
+  if(c.solved===false&&res.blown.length>0&&res.lit>=res.sensors)m+=' - NOT COUNTED: FUSE BLOWN';
+  return {res:res,text:m,solved:(res.sensors>0&&res.lit>=res.sensors&&res.blown.length===0)};
 }
 function stars(){const d=Math.max(0,mine.length-par());return d===0?3:d<=2?2:1;}
 function runRound(quiet){
