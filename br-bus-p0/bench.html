@@ -394,6 +394,25 @@ function act(id){
   render();
 }
 cv.addEventListener('contextmenu',e=>e.preventDefault());
+let hold=0;
+function cellHasPart(p){
+  if(!(p.x>=BX&&p.x<BX+BW&&p.y>=BY&&p.y<BY+BH))return false;
+  const cx=Math.floor((p.x-BX)/CELL),cy=Math.floor((p.y-BY)/CELL);
+  return mine.some(m=>m[1]===cx&&m[2]===cy);
+}
+function pullAt(p){
+  const cx=Math.floor((p.x-BX)/CELL),cy=Math.floor((p.y-BY)/CELL);
+  const i=mine.findIndex(m=>m[1]===cx&&m[2]===cy);
+  if(i>=0){mine.splice(i,1);last=null;runRound();render();return true;}
+  return false;
+}
+cv.addEventListener('pointerdown',ev=>{
+  clearTimeout(hold);
+  if(ev.pointerType==='touch'&&cellHasPart(toLocal(ev)))hold=setTimeout(()=>{pullAt(toLocal(ev));},550);
+});
+cv.addEventListener('pointerup',()=>clearTimeout(hold));
+cv.addEventListener('pointercancel',()=>clearTimeout(hold));
+cv.addEventListener('pointermove',()=>clearTimeout(hold));
 cv.addEventListener('pointerdown',ev=>{
   const p=toLocal(ev);
   for(const b of BTNS)if(p.x>=b.x&&p.x<b.x+b.w&&p.y>=b.y&&p.y<b.y+b.h){act(b.id);return;}
@@ -421,10 +440,16 @@ window.addEventListener('keydown',e=>{
 /* ---- init ---- */
 function fit(){
   const wrap=document.getElementById('wrap');
-  const avail=Math.min((wrap&&wrap.clientWidth)||W, 960);
-  const s=Math.max(1, Math.floor(avail/W));
+  const availW=Math.min((wrap&&wrap.clientWidth)||W, 960);
+  const availH=Math.max(150,(window.innerHeight||600)-110);
+  let s=Math.floor(availW/W);
+  if(s>=1&&s*H>availH)s=Math.max(1,Math.floor(availH/H));
+  if(s<1){s=Math.floor(Math.min(availW/W,availH/H)*16)/16;if(s<0.5)s=0.5;}
   cv.style.width=(W*s)+'px';
   cv.style.height=(H*s)+'px';
+  const n=document.getElementById('notes');
+  if(n){if(!n.dataset.base)n.dataset.base=n.innerHTML;
+    n.innerHTML=(s<1?'<b>ROTATE YOUR PHONE</b> for a full-size crisp board. ':'')+(n.dataset.base||'');}
 }
 window.addEventListener('resize',fit);
 fit();
