@@ -33,6 +33,49 @@ hr{border:0;border-top:1px solid #3a4d55;margin:30px 0}
    <strong><code>C:\BRTC\Games</code> icon/tile spec</strong>. §10.</li>
 </ol>
 <hr />
+<p><strong>Update, 26 Nov — after your read of the P0 build</strong></p>
+<p><strong>1. Your two findings, fixed and verified</strong> (commit <code>db265cc</code>).</p>
+<ul>
+<li><em>The XP cap claim did not match the code — you were right.</em> The code capped the parts term at 24
+  <strong>per solve</strong> and had no daily limit at all; the note claimed a daily cap. Now there is a real one:
+  <code>PAD_CAP 24</code> per board (unchanged rule) plus <code>DAY_CAP 500</code> per day with a date rollover. Verified in
+  a browser: a fresh day still pays exactly <strong>+72 XP</strong> for bench 8 (no silent rebalance), an exhausted
+  day pays <strong>0</strong> and says <code>DAILY CAP REACHED: NO XP LEFT TODAY</code> with no phantom <code>+0 XP</code>, and a new date
+  resets the counter. The panel now reads <code>XP TODAY n</code> / <code>DAILY CAP 500</code>, and <code>CAP REACHED</code> in gold when
+  it bites. The old <code>CARE CAP 24</code> label and the false sentence in the page note are gone.</li>
+<li><em>The Buddy figures.</em> <code>buddy()</code> is deleted. The strip now draws two <strong>faceless generic rig hands</strong> — a
+  hard-hat band, no eyes, no antenna, no traits — captioned <code>RIG HANDS (GENERIC)</code>, with a comment in
+  the source stating that nothing in the bench renders a Buddy while the attestation read path is open.
+  Verified by reading the drawn pixels back off the canvas, not by eye.</li>
+</ul>
+<p><strong>2. <code>#0009</code> is resolved, and the resolution is onchain.</strong> Pinned read at block <code>62333815</code>,
+  contract <code>0x2B48fFaa0c453786EBF1a786c6f2e21Dcb97f29b</code> (<code>Base Rooms OS Buddies</code>, <code>BUDDY</code>,
+  <code>totalSupply()</code> = 446):</p>
+<ul>
+<li><code>tokenURI(9)</code> returns an onchain <code>data:application/json;base64</code> whose <code>attributes</code> are
+  <strong>Class A · Paint ORANGE · Chassis ATM · Face <code>$$</code> · Top HARD HAT · Gear SUNGLASSES</strong> — exactly the
+  island reading you quoted (you simply did not mention the face).</li>
+<li>The <code>units/looks?ids=9</code> payload (crown / specs / bowtie / midnight) <strong>does not appear in the onchain
+  traits at all</strong>. So it is a display-layer override, precisely as you said: the record is onchain and
+  the look sits on top of it. You were right, and my original read was the override, not the buddy.</li>
+<li>The read path a module should use is in the contract's own words: <em>"read <code>tokenURI</code> / <code>tokenSVG</code> /
+  <code>traitsOf</code> / <code>spriteOf</code> straight from the contract, no API or server needed."</em> <code>traitsOf(9)</code> returns
+  <code>1</code> (revealed).</li>
+<li>The same metadata says <strong>CC0</strong> — which answers the licence question for the buddy art and metadata.
+  My MIT proposal for the module code stands unless you would rather it match CC0; either is fine by me.</li>
+<li>It also ships <code>animation_url</code> as a <strong>self-contained onchain HTML with a strict CSP</strong>
+  (<code>default-src 'none'; img-src data:</code>). The bench is built in exactly that shape — one file, no
+  network, no external assets, no server — so it could be delivered the same way, straight from a
+  contract. I am not asking for that; I am noting that the shapes already match.</li>
+</ul>
+<p><strong>3. Your other confirmations, recorded.</strong> Build to the contract the app already prints — no new API
+(<code>POST {base}/hook</code>, <code>/hook/inbox?wait=25</code>, <code>/hook/approval</code> + poll). <code>/hook</code> gets normalised to 401, and
+until it ships a body containing an <code>error</code> field means failure <strong>whatever the status code</strong> — the
+adapter checks the body, not the status. Module keys are yours, sandbox first, TEST never touches live
+data. Looks are display-only, attestation is the layer of record, a module reads it read-only and never
+writes it: the bench therefore renders <strong>zero</strong> Buddies until you give the read path, and that is now
+provable from the shipped file rather than promised.</p>
+<hr />
 <h2>1 · What this is</h2>
 <p><strong>BUS.EXE BENCH</strong> is a small game about routing current. Each bench gives you a source, one or more
 sensors, and a bin of parts. You place parts on a grid, rotate them to face each other, and run the
@@ -201,7 +244,8 @@ category — so a module riding it is a first-class citizen of your design, not 
 for me. (The full method vocabulary found in your bundle: <code>connector</code>, <code>hooks</code>, <code>mcp</code>, <code>wrapper</code>,
 <code>http</code>, <code>webhook</code>, <code>tell</code>, plus <code>muse</code>.)</p>
 <h3>3.2 The rail, exactly as your own onboarding text specifies it</h3>
-<p>Your app generates these for users, so this is your contract, not my interpretation:</p>
+<p>Your app generates these for users, so this is your contract, not my interpretation — and you have
+since confirmed it as the rail to build to, with no new API:</p>
 <pre><code class="language-bash">curl -s -X POST {base}/hook -H &quot;Authorization: Bearer ***&quot; -H &quot;content-type: application/json&quot; \
      -d '{&quot;event&quot;:&quot;tool&quot;,&quot;command&quot;:&quot;npm test&quot;}'
 curl -s -X POST {base}/hook -H &quot;content-type: application/json&quot; \
@@ -299,8 +343,9 @@ of the flag I build into the client. Two switches; yours is the real one.</p>
 </code></pre>
 <p>while <code>/hook/inbox</code>, <code>/hook/approval/&lt;id&gt;</code> and <code>/hook/event</code> return a proper <strong>401</strong>. Any module or
 agent written against a stock HTTP client — check the status, treat 2xx as success — will record a
-<strong>rejected event as a delivered one</strong> and never retry it. Normalising <code>/hook</code> to 401/403 would close
-that quietly.</p>
+<strong>rejected event as a delivered one</strong> and never retry it. You have confirmed <code>/hook</code> will be normalised
+to 401; until that ships, the shared rule is that a body containing an <code>error</code> field is a failure
+whatever the status code says, and that is what the adapter implements.</p>
 <h3>3.6 The honest line on what is verified</h3>
 <p><strong>Verified today:</strong> the paths exist and their methods; the 401 + <code>unknown or revoked key</code> behaviour;
 the client/method matrix and the <code>Script, bot, cron or CI</code> entry; the payload examples above; the
@@ -551,7 +596,7 @@ buddy. Nothing in this module scales with the size of the island.</p>
 </ul>
 <h2>9 · Status</h2>
 <p><strong>Playable now — no install, no wallet, no key:</strong></p>
-<p>https://htmlpreview.github.io/?https://cdn.jsdelivr.net/gh/D0xedDevi0/D0xedDev@54b500f/br-bus-p0/bench.html</p>
+<p>https://htmlpreview.github.io/?https://cdn.jsdelivr.net/gh/D0xedDevi0/D0xedDev@db265cc/br-bus-p0/bench.html</p>
 <p>Eight benches, one file, offline. Source fragments, solver notes and screenshots sit beside it in the
 same branch, so it can be rebuilt rather than only played.</p>
 <p><strong>Verified:</strong> the file's own selftest returns 0 failures; all eight authored solutions solve; negative
@@ -559,6 +604,7 @@ cases (reversed resistor, blown fuse, relay with no control, open circuit) all r
 never score; a blown-fuse board that reaches the sensor through a bypass is explicitly <strong>not counted</strong>;
 no runtime network calls; the palette and button colours resolve through the palette object; the right
 panel fits all eight benches without collision; the mobile fit table in §6.3 was measured in a browser.</p>
+<p><strong>Fixed after your review</strong> (commit <code>db265cc</code>): the daily XP cap the note claimed now exists and is enforced with a date rollover, and the two Buddy figures are now faceless generic rig hands. Both are evidenced in the update block at the top.</p>
 <p><strong>Still open, and I would rather say it than have you find it:</strong> the minimality of benches 5-8 at their
 authored PAR values is <strong>not formally proven</strong> (benches 1-4 have BFS proofs; 5-8 are authored targets
 until a multi-branch solver exists); the evaluator's relay/splitter/fuse semantics have been tested
@@ -586,20 +632,14 @@ owner-set display override sitting on top of the attested evolution state, and s
 attestation state read-only to render the buddy tending a rig? Until it is answered, the bench renders
 no buddy at all.</p>
 <h2>11 · Two things I noticed on your side, with evidence</h2>
-<p><strong>a) <code>#0009</code> has two different looks depending on where you read it.</strong> The island's own view for the
-unit reads (your description) orange paint, ATM chassis, hard hat, sunglasses, class A, Scout — but
-<code>os.baserooms.io/units/looks?ids=9</code> returns the override layer:</p>
-<pre><code class="language-json">{&quot;looks&quot;:{&quot;9&quot;:{&quot;head&quot;:&quot;crown&quot;,&quot;face&quot;:&quot;specs&quot;,&quot;body&quot;:&quot;bowtie&quot;,&quot;paint&quot;:&quot;midnight&quot;,&quot;auto&quot;:{&quot;blanket&quot;:false}}}}
-</code></pre>
-<p>Different slots (chassis/hat/glasses vs head/face/body) <strong>and</strong> a different paint value. If your UI
-shows orange while the looks endpoint says midnight, either the override is not reaching the island
-view or the island view is reading base traits. Related: <code>st.statues</code> in the island snapshot is a
-9-entry list of <strong>unit ids</strong> — <code>[35,377,323,335,9,58,2,428,374]</code> — with 9 among them and
-<code>s["9"] = slava.base.eth</code>; medals are a different field. If the UI reports zero medals for a unit that
-holds a statue, that is worth a look too. (My reading of <code>st.statues</code> as unit ids comes from my own
-notes, not from a spec — correct me if the field means something else.)</p>
+<p><strong>a) <code>#0009</code> — resolved, onchain.</strong> <code>tokenURI(9)</code> on the buddies contract holds exactly the traits
+your island reported (Class A / ORANGE / ATM chassis / <code>$$</code> face / HARD HAT / SUNGLASSES), and the
+<code>units/looks</code> payload (crown / specs / bowtie / midnight) does not appear in the onchain traits at all.
+So your reading was right and mine was the override layer: the record is onchain, the look sits on top.
+Detail and block number in the update block at the top.</p>
 <p><strong>b) <code>/hook</code> returns success on a rejected event.</strong> See §3.5 — a 200 with an error body, where its
-subpaths return 401. Worth normalising before modules start trusting status codes.</p>
+subpaths return 401. You have confirmed this gets normalised to 401; until then the interim rule is
+shared and the adapter checks for an <code>error</code> field rather than trusting the status code.</p>
 <h2>12 · Verify all of this yourself</h2>
 <pre><code class="language-bash"># the rail exists and rejects without a key (subpaths 401; the /hook root 200 with an error body)
 curl -s -o /dev/null -w &quot;%{http_code}\n&quot; https://os.baserooms.io/hook
@@ -617,4 +657,4 @@ curl -s &quot;https://world.baserooms.io/islands/1/snapshot&quot; -H &quot;Refer
 It stays a standalone embeddable file until you want it in by PR, exactly as you said in answer 16. The
 one thing I would ask is that the items in §10 land when they can, because the prototype is finished
 and is now waiting on a key rather than on work.</p>
-<p>D0xedDev · @D0xedDevi0 · reply here or on X.</p><div class="f">BUS.EXE BENCH - module handover - D0xedDev @D0xedDevi0 - 25 Nov 2026</div></div></body></html>
+<p>D0xedDev · @D0xedDevi0 · reply here or on X.</p><div class="f">BUS.EXE BENCH - module handover - D0xedDev @D0xedDevi0 - rev 26 Nov 2026</div></div></body></html>

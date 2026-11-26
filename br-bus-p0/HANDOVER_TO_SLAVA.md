@@ -19,6 +19,52 @@ Handover document · D0xedDev (@D0xedDevi0) · 25 Nov 2026 · for Slava Mushyako
 
 ---
 
+**Update, 26 Nov — after your read of the P0 build**
+
+**1. Your two findings, fixed and verified** (commit `db265cc`).
+
+- *The XP cap claim did not match the code — you were right.* The code capped the parts term at 24
+  **per solve** and had no daily limit at all; the note claimed a daily cap. Now there is a real one:
+  `PAD_CAP 24` per board (unchanged rule) plus `DAY_CAP 500` per day with a date rollover. Verified in
+  a browser: a fresh day still pays exactly **+72 XP** for bench 8 (no silent rebalance), an exhausted
+  day pays **0** and says `DAILY CAP REACHED: NO XP LEFT TODAY` with no phantom `+0 XP`, and a new date
+  resets the counter. The panel now reads `XP TODAY n` / `DAILY CAP 500`, and `CAP REACHED` in gold when
+  it bites. The old `CARE CAP 24` label and the false sentence in the page note are gone.
+- *The Buddy figures.* `buddy()` is deleted. The strip now draws two **faceless generic rig hands** — a
+  hard-hat band, no eyes, no antenna, no traits — captioned `RIG HANDS (GENERIC)`, with a comment in
+  the source stating that nothing in the bench renders a Buddy while the attestation read path is open.
+  Verified by reading the drawn pixels back off the canvas, not by eye.
+
+**2. `#0009` is resolved, and the resolution is onchain.** Pinned read at block `62333815`,
+  contract `0x2B48fFaa0c453786EBF1a786c6f2e21Dcb97f29b` (`Base Rooms OS Buddies`, `BUDDY`,
+  `totalSupply()` = 446):
+
+- `tokenURI(9)` returns an onchain `data:application/json;base64` whose `attributes` are
+  **Class A · Paint ORANGE · Chassis ATM · Face `$$` · Top HARD HAT · Gear SUNGLASSES** — exactly the
+  island reading you quoted (you simply did not mention the face).
+- The `units/looks?ids=9` payload (crown / specs / bowtie / midnight) **does not appear in the onchain
+  traits at all**. So it is a display-layer override, precisely as you said: the record is onchain and
+  the look sits on top of it. You were right, and my original read was the override, not the buddy.
+- The read path a module should use is in the contract's own words: *"read `tokenURI` / `tokenSVG` /
+  `traitsOf` / `spriteOf` straight from the contract, no API or server needed."* `traitsOf(9)` returns
+  `1` (revealed).
+- The same metadata says **CC0** — which answers the licence question for the buddy art and metadata.
+  My MIT proposal for the module code stands unless you would rather it match CC0; either is fine by me.
+- It also ships `animation_url` as a **self-contained onchain HTML with a strict CSP**
+  (`default-src 'none'; img-src data:`). The bench is built in exactly that shape — one file, no
+  network, no external assets, no server — so it could be delivered the same way, straight from a
+  contract. I am not asking for that; I am noting that the shapes already match.
+
+**3. Your other confirmations, recorded.** Build to the contract the app already prints — no new API
+(`POST {base}/hook`, `/hook/inbox?wait=25`, `/hook/approval` + poll). `/hook` gets normalised to 401, and
+until it ships a body containing an `error` field means failure **whatever the status code** — the
+adapter checks the body, not the status. Module keys are yours, sandbox first, TEST never touches live
+data. Looks are display-only, attestation is the layer of record, a module reads it read-only and never
+writes it: the bench therefore renders **zero** Buddies until you give the read path, and that is now
+provable from the shipped file rather than promised.
+
+---
+
 ## 1 · What this is
 
 **BUS.EXE BENCH** is a small game about routing current. Each bench gives you a source, one or more
@@ -109,7 +155,8 @@ for me. (The full method vocabulary found in your bundle: `connector`, `hooks`, 
 
 ### 3.2 The rail, exactly as your own onboarding text specifies it
 
-Your app generates these for users, so this is your contract, not my interpretation:
+Your app generates these for users, so this is your contract, not my interpretation — and you have
+since confirmed it as the rail to build to, with no new API:
 
 ```bash
 curl -s -X POST {base}/hook -H "Authorization: Bearer ***" -H "content-type: application/json" \
@@ -172,8 +219,9 @@ of the flag I build into the client. Two switches; yours is the real one.
 
 while `/hook/inbox`, `/hook/approval/<id>` and `/hook/event` return a proper **401**. Any module or
 agent written against a stock HTTP client — check the status, treat 2xx as success — will record a
-**rejected event as a delivered one** and never retry it. Normalising `/hook` to 401/403 would close
-that quietly.
+**rejected event as a delivered one** and never retry it. You have confirmed `/hook` will be normalised
+to 401; until that ships, the shared rule is that a body containing an `error` field is a failure
+whatever the status code says, and that is what the adapter implements.
 
 ### 3.6 The honest line on what is verified
 
@@ -324,7 +372,7 @@ One flag, no deploy, as you asked — plus your own key revocation as the outer 
 
 **Playable now — no install, no wallet, no key:**
 
-https://htmlpreview.github.io/?https://cdn.jsdelivr.net/gh/D0xedDevi0/D0xedDev@54b500f/br-bus-p0/bench.html
+https://htmlpreview.github.io/?https://cdn.jsdelivr.net/gh/D0xedDevi0/D0xedDev@db265cc/br-bus-p0/bench.html
 
 Eight benches, one file, offline. Source fragments, solver notes and screenshots sit beside it in the
 same branch, so it can be rebuilt rather than only played.
@@ -334,6 +382,8 @@ cases (reversed resistor, blown fuse, relay with no control, open circuit) all r
 never score; a blown-fuse board that reaches the sensor through a bypass is explicitly **not counted**;
 no runtime network calls; the palette and button colours resolve through the palette object; the right
 panel fits all eight benches without collision; the mobile fit table in §6.3 was measured in a browser.
+
+**Fixed after your review** (commit `db265cc`): the daily XP cap the note claimed now exists and is enforced with a date rollover, and the two Buddy figures are now faceless generic rig hands. Both are evidenced in the update block at the top.
 
 **Still open, and I would rather say it than have you find it:** the minimality of benches 5-8 at their
 authored PAR values is **not formally proven** (benches 1-4 have BFS proofs; 5-8 are authored targets
@@ -367,24 +417,15 @@ no buddy at all.
 
 ## 11 · Two things I noticed on your side, with evidence
 
-**a) `#0009` has two different looks depending on where you read it.** The island's own view for the
-unit reads (your description) orange paint, ATM chassis, hard hat, sunglasses, class A, Scout — but
-`os.baserooms.io/units/looks?ids=9` returns the override layer:
-
-```json
-{"looks":{"9":{"head":"crown","face":"specs","body":"bowtie","paint":"midnight","auto":{"blanket":false}}}}
-```
-
-Different slots (chassis/hat/glasses vs head/face/body) **and** a different paint value. If your UI
-shows orange while the looks endpoint says midnight, either the override is not reaching the island
-view or the island view is reading base traits. Related: `st.statues` in the island snapshot is a
-9-entry list of **unit ids** — `[35,377,323,335,9,58,2,428,374]` — with 9 among them and
-`s["9"] = slava.base.eth`; medals are a different field. If the UI reports zero medals for a unit that
-holds a statue, that is worth a look too. (My reading of `st.statues` as unit ids comes from my own
-notes, not from a spec — correct me if the field means something else.)
+**a) `#0009` — resolved, onchain.** `tokenURI(9)` on the buddies contract holds exactly the traits
+your island reported (Class A / ORANGE / ATM chassis / `$$` face / HARD HAT / SUNGLASSES), and the
+`units/looks` payload (crown / specs / bowtie / midnight) does not appear in the onchain traits at all.
+So your reading was right and mine was the override layer: the record is onchain, the look sits on top.
+Detail and block number in the update block at the top.
 
 **b) `/hook` returns success on a rejected event.** See §3.5 — a 200 with an error body, where its
-subpaths return 401. Worth normalising before modules start trusting status codes.
+subpaths return 401. You have confirmed this gets normalised to 401; until then the interim rule is
+shared and the adapter checks for an `error` field rather than trusting the status code.
 
 ## 12 · Verify all of this yourself
 
