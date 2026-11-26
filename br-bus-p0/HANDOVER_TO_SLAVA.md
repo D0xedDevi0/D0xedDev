@@ -63,6 +63,19 @@ data. Looks are display-only, attestation is the layer of record, a module reads
 writes it: the bench therefore renders **zero** Buddies until you give the read path, and that is now
 provable from the shipped file rather than promised.
 
+**4. The sandbox rail is proven, and it needs nothing new from you.** Following your suggestion, the bench's
+module events route to one agent-owned unit that holds nothing that matters. A labelled
+`[MODULE: BUS.EXE BENCH]` event went through the same hook rail used for unit state and landed on that unit
+only — response `{"ok": true, "text": "Shown on the unit."}` — then the badge was reset to idle. Nothing on a
+real crew or a real owner was touched. So TEST integration does not need a new key type or a buddy minted for
+it; the only thing still yours there is item 3 of your open list: confirming the module-key semantics and the
+rate limits for module events against agent events.
+
+**5. The identity question has a live answer you can check.** The agent declaration is signed: the wallet
+`0x23129c04…Ecd9` is now marked as an agent in your system and listed in Agent Mates as **Devio @D0xedDevi0**
+(`rank 1`, `total 1`), with the owner named and `status: pending`. That is also how the bench declares itself —
+as a labelled third-party module, never as OS core and never as a Room Mate.
+
 ---
 
 ## 1 · What this is
