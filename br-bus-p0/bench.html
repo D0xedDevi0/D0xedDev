@@ -10,7 +10,7 @@ html,body{margin:0;background:#223239}
 #notes b{color:#E3C67E}
 </style></head><body>
 <div id="wrap"><canvas id="c"></canvas>
-<div id="notes"><b>BUS.EXE BENCH P0</b> - deterministic circuit bench. Click a part, then click a cell. <b>R</b> rotates the part in your hand. Right-click a placed part to pull it. <b>ENTER</b> runs the board, <b>N</b> next bench, <b>H</b> hint, <b>C</b> clears. Par is the authored solution length; a repeat solve pays 25% and XP is capped at 24 pads a day. Offline by design: no wallet, no network, no testnet.</div></div>
+<div id="notes"><b>BUS.EXE BENCH P0</b> - deterministic circuit bench. Click a part, then click a cell. <b>R</b> rotates the part in your hand. Right-click a placed part to pull it. <b>ENTER</b> runs the board, <b>N</b> next bench, <b>H</b> hint, <b>C</b> clears. Par is the authored solution length; a repeat solve pays 25%. XP is capped at 24 pads per board and 500 a day locally - a prototype self-limit, and the island's cap decides what lands. The two figures on the strip are generic rig hands: the bench renders no Buddies. Offline by design: no wallet, no network, no testnet.</div></div>
 <script>
 /* 5x7 uppercase bitmap font - hand-built, no TTF, no anti-aliasing */
 const KEY="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,:-/%$+>()!#=";
@@ -179,10 +179,13 @@ const PUZZLES=[
       ['WIRE',11,3,0],['WIRE',11,4,0],['WIRE',11,5,0]]}];
 /* ---- bench state ---- */
 let idx=0,mine=[],sel='WIRE',rotSel=0,last=null,hint=false,xp=0,showPar=false,flash=0;
-const SAVE='busexe.bench.p0';
-let store={xp:0,solved:{}};
+const SAVE='busexe.bench.p0',PAD_CAP=24,DAY_CAP=500;  /* PAD_CAP: per board. DAY_CAP: the bench's own self-limit, ~one full clear of the eight benches (a par-exact clear pays ~457). The island's cap is authoritative. */
+let store={xp:0,xpToday:0,day:'',solved:{}};
 try{const s=localStorage.getItem(SAVE);if(s)store=JSON.parse(s);}catch(e){}
 xp=store.xp||0;
+rollDay();
+function todayKey(){const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();}
+function rollDay(){const t=todayKey();if(store.day!==t){store.day=t;store.xpToday=0;save();}}
 function save(){try{localStorage.setItem(SAVE,JSON.stringify(store));}catch(e){}}
 function puzzle(){return PUZZLES[idx];}
 function par(){return PUZZLES[idx].sol.length;}
@@ -225,15 +228,18 @@ function stars(){const d=Math.max(0,mine.length-par());return d===0?3:d<=2?2:1;}
 function runRound(quiet){
   const c=cycles(),p=puzzle();let gained=0,txt=c.text;
   if(c.solved&&!quiet){
-    const st=stars();
-    gained=Math.min(mine.length,24)+(10+5*st);
-    if(!hint)gained=Math.round(gained*1.5);
-    const key='p'+idx;
-    if(store.solved[key]){gained=Math.max(1,Math.round(gained*0.25));txt+=' - REPEAT: 25% XP';}
+    const st=stars(),key='p'+idx;
+    rollDay();
+    let full=Math.min(mine.length,PAD_CAP)+(10+5*st);
+    if(!hint)full=Math.round(full*1.5);
+    if(store.solved[key]){full=Math.max(1,Math.round(full*0.25));txt+=' - REPEAT: 25% XP';}
     else if(mine.length===p.sol.length&&!hint)txt+=' - PAR EXACT, NO HINT: 1.5X';
     else if(hint)txt+=' - HINT USED';
-    store.solved[key]=1;store.xp=(store.xp||0)+gained;xp=store.xp;save();
-    txt+=' +'+gained+' XP';flash=Date.now();
+    const room=Math.max(0,DAY_CAP-(store.xpToday||0));
+    if(room<=0){gained=0;txt+=' - DAILY CAP REACHED: NO XP LEFT TODAY';}
+    else{gained=Math.min(full,room);if(gained<full)txt+=' - DAILY CAP: '+gained+' OF '+full+' XP';}
+    store.solved[key]=1;store.xp=(store.xp||0)+gained;store.xpToday=(store.xpToday||0)+gained;xp=store.xp;save();
+    if(gained>0){txt+=' +'+gained+' XP';flash=Date.now();}
   }
   last={msg:txt,res:c.res,solved:c.solved,par:p.sol.length,gained:gained};
   return last;
@@ -271,12 +277,14 @@ function drawPart(x,y,t,rot,powered){
     if(d==='S')r(x+7,y+14,2,3,cc);
   }
 }
-function buddy(x,y,body,arm){
+/* Generic rig-hand silhouettes: faceless, no traits, no markings. NOTHING in this bench renders a
+   Buddy - the attestation read path and where display overrides live are still open, so no figure
+   here may resemble a specific Buddy or imply the OS endorsed anything. */
+function rigHand(x,y,vest,arm){
   r(x+1,y+20,16,4,P.grassSh);
-  r(x+4,y+2,10,11,P.ink);r(x+5,y+3,8,9,P[body]);
-  r(x+6,y+5,6,6,P.white);r(x+7,y+6,1,2,P.ink);r(x+10,y+6,1,2,P.ink);r(x+8,y+9,3,1,P.ink);
-  r(x+8,y,1,2,P.ink);r(x+8,y-1,1,1,P.gold);
-  r(x+4,y+13,10,2,P.ink);r(x+5,y+15,8,5,P[body]);r(x+6,y+15,6,1,P.blueHi);
+  r(x+4,y+2,10,11,P.ink);r(x+5,y+3,8,9,P[vest]);
+  r(x+3,y,12,2,P.gold);r(x+5,y-1,8,2,P.goldDk);      /* hard hat - no antenna, no face */
+  r(x+4,y+13,10,2,P.ink);r(x+5,y+15,8,5,P[vest]);r(x+6,y+15,6,1,P.blueHi);
   r(x+3,y+16,1,3,P.ink);r(x+14,y+16,1,3,P.ink);
   if(arm)r(x+15,y+13,3,1,P.ink);
 }
@@ -322,7 +330,8 @@ function render(){
   /* bench strip */
   r(BX-6,BY+BH+6,BW+12,40,P.grass);
   r(BX+4,BY+BH+22,120,7,P.woodDk);r(BX+6,BY+BH+24,116,3,P.wood);
-  buddy(BX+12,BY+BH+2,'blue',1);buddy(BX+40,BY+BH+4,'gold',0);
+  rigHand(BX+12,BY+BH+2,'blue',1);rigHand(BX+40,BY+BH+4,'gold',0);
+  ptext(BX+8,BY+BH+34,'RIG HANDS (GENERIC)',P.grey);
   ptext(BX+70,BY+BH+14,puzzle().name,P.ink);
   const lit=(res&&res.lit)||0,sen=(res&&res.sensors)||0;
   ptext(BX+70,BY+BH+26,'SENSORS '+lit+'/'+sen+(last&&last.solved?'  - SOLVED':'') ,last&&last.solved?P.green:P.wood);
@@ -355,8 +364,10 @@ function render(){
   ptext(PANX+6,statTop,'XP '+xp,P.ink);
   ptext(PANX+6,statTop+12,'PAR '+par()+' PARTS',P.wood);
   ptext(PANX+6,statTop+24,'BENCH '+(idx+1)+' OF 8',P.wood);
-  ptext(PANX+6,statTop+36,'CARE CAP 24',P.grey);
-  ptext(PANX+6,statTop+48,'XP PER DAY',P.grey);
+  rollDay();
+  const capFull=(store.xpToday||0)>=DAY_CAP;
+  ptext(PANX+6,statTop+36,'XP TODAY '+(store.xpToday||0),P.grey);
+  ptext(PANX+6,statTop+48,capFull?'CAP REACHED':'DAILY CAP '+DAY_CAP,capFull?P.gold:P.grey);
   /* status */
   r(WX+2,SBY,WW-4,22,P.panel);r(WX+2,SBY,WW-4,1,P.border);
   const line=last?last.msg:'CLICK A PART, THEN CLICK THE GRID. PRESS RUN.';

@@ -1,9 +1,12 @@
 /* ---- bench state ---- */
 let idx=0,mine=[],sel='WIRE',rotSel=0,last=null,hint=false,xp=0,showPar=false,flash=0;
-const SAVE='busexe.bench.p0';
-let store={xp:0,solved:{}};
+const SAVE='busexe.bench.p0',PAD_CAP=24,DAY_CAP=500;  /* PAD_CAP: per board. DAY_CAP: the bench's own self-limit, ~one full clear of the eight benches (a par-exact clear pays ~457). The island's cap is authoritative. */
+let store={xp:0,xpToday:0,day:'',solved:{}};
 try{const s=localStorage.getItem(SAVE);if(s)store=JSON.parse(s);}catch(e){}
 xp=store.xp||0;
+rollDay();
+function todayKey(){const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();}
+function rollDay(){const t=todayKey();if(store.day!==t){store.day=t;store.xpToday=0;save();}}
 function save(){try{localStorage.setItem(SAVE,JSON.stringify(store));}catch(e){}}
 function puzzle(){return PUZZLES[idx];}
 function par(){return PUZZLES[idx].sol.length;}
@@ -46,15 +49,18 @@ function stars(){const d=Math.max(0,mine.length-par());return d===0?3:d<=2?2:1;}
 function runRound(quiet){
   const c=cycles(),p=puzzle();let gained=0,txt=c.text;
   if(c.solved&&!quiet){
-    const st=stars();
-    gained=Math.min(mine.length,24)+(10+5*st);
-    if(!hint)gained=Math.round(gained*1.5);
-    const key='p'+idx;
-    if(store.solved[key]){gained=Math.max(1,Math.round(gained*0.25));txt+=' - REPEAT: 25% XP';}
+    const st=stars(),key='p'+idx;
+    rollDay();
+    let full=Math.min(mine.length,PAD_CAP)+(10+5*st);
+    if(!hint)full=Math.round(full*1.5);
+    if(store.solved[key]){full=Math.max(1,Math.round(full*0.25));txt+=' - REPEAT: 25% XP';}
     else if(mine.length===p.sol.length&&!hint)txt+=' - PAR EXACT, NO HINT: 1.5X';
     else if(hint)txt+=' - HINT USED';
-    store.solved[key]=1;store.xp=(store.xp||0)+gained;xp=store.xp;save();
-    txt+=' +'+gained+' XP';flash=Date.now();
+    const room=Math.max(0,DAY_CAP-(store.xpToday||0));
+    if(room<=0){gained=0;txt+=' - DAILY CAP REACHED: NO XP LEFT TODAY';}
+    else{gained=Math.min(full,room);if(gained<full)txt+=' - DAILY CAP: '+gained+' OF '+full+' XP';}
+    store.solved[key]=1;store.xp=(store.xp||0)+gained;store.xpToday=(store.xpToday||0)+gained;xp=store.xp;save();
+    if(gained>0){txt+=' +'+gained+' XP';flash=Date.now();}
   }
   last={msg:txt,res:c.res,solved:c.solved,par:p.sol.length,gained:gained};
   return last;

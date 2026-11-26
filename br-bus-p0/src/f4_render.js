@@ -30,12 +30,14 @@ function drawPart(x,y,t,rot,powered){
     if(d==='S')r(x+7,y+14,2,3,cc);
   }
 }
-function buddy(x,y,body,arm){
+/* Generic rig-hand silhouettes: faceless, no traits, no markings. NOTHING in this bench renders a
+   Buddy - the attestation read path and where display overrides live are still open, so no figure
+   here may resemble a specific Buddy or imply the OS endorsed anything. */
+function rigHand(x,y,vest,arm){
   r(x+1,y+20,16,4,P.grassSh);
-  r(x+4,y+2,10,11,P.ink);r(x+5,y+3,8,9,P[body]);
-  r(x+6,y+5,6,6,P.white);r(x+7,y+6,1,2,P.ink);r(x+10,y+6,1,2,P.ink);r(x+8,y+9,3,1,P.ink);
-  r(x+8,y,1,2,P.ink);r(x+8,y-1,1,1,P.gold);
-  r(x+4,y+13,10,2,P.ink);r(x+5,y+15,8,5,P[body]);r(x+6,y+15,6,1,P.blueHi);
+  r(x+4,y+2,10,11,P.ink);r(x+5,y+3,8,9,P[vest]);
+  r(x+3,y,12,2,P.gold);r(x+5,y-1,8,2,P.goldDk);      /* hard hat - no antenna, no face */
+  r(x+4,y+13,10,2,P.ink);r(x+5,y+15,8,5,P[vest]);r(x+6,y+15,6,1,P.blueHi);
   r(x+3,y+16,1,3,P.ink);r(x+14,y+16,1,3,P.ink);
   if(arm)r(x+15,y+13,3,1,P.ink);
 }
@@ -81,7 +83,8 @@ function render(){
   /* bench strip */
   r(BX-6,BY+BH+6,BW+12,40,P.grass);
   r(BX+4,BY+BH+22,120,7,P.woodDk);r(BX+6,BY+BH+24,116,3,P.wood);
-  buddy(BX+12,BY+BH+2,'blue',1);buddy(BX+40,BY+BH+4,'gold',0);
+  rigHand(BX+12,BY+BH+2,'blue',1);rigHand(BX+40,BY+BH+4,'gold',0);
+  ptext(BX+8,BY+BH+34,'RIG HANDS (GENERIC)',P.grey);
   ptext(BX+70,BY+BH+14,puzzle().name,P.ink);
   const lit=(res&&res.lit)||0,sen=(res&&res.sensors)||0;
   ptext(BX+70,BY+BH+26,'SENSORS '+lit+'/'+sen+(last&&last.solved?'  - SOLVED':'') ,last&&last.solved?P.green:P.wood);
@@ -114,8 +117,10 @@ function render(){
   ptext(PANX+6,statTop,'XP '+xp,P.ink);
   ptext(PANX+6,statTop+12,'PAR '+par()+' PARTS',P.wood);
   ptext(PANX+6,statTop+24,'BENCH '+(idx+1)+' OF 8',P.wood);
-  ptext(PANX+6,statTop+36,'CARE CAP 24',P.grey);
-  ptext(PANX+6,statTop+48,'XP PER DAY',P.grey);
+  rollDay();
+  const capFull=(store.xpToday||0)>=DAY_CAP;
+  ptext(PANX+6,statTop+36,'XP TODAY '+(store.xpToday||0),P.grey);
+  ptext(PANX+6,statTop+48,capFull?'CAP REACHED':'DAILY CAP '+DAY_CAP,capFull?P.gold:P.grey);
   /* status */
   r(WX+2,SBY,WW-4,22,P.panel);r(WX+2,SBY,WW-4,1,P.border);
   const line=last?last.msg:'CLICK A PART, THEN CLICK THE GRID. PRESS RUN.';
