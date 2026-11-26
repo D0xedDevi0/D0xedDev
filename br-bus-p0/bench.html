@@ -440,7 +440,9 @@ window.addEventListener('keydown',e=>{
 /* ---- init ---- */
 function fit(){
   const wrap=document.getElementById('wrap');
-  const availW=Math.min((wrap&&wrap.clientWidth)||W, 960);
+  const cs=wrap?window.getComputedStyle(wrap):null;
+  const pad=cs?((parseFloat(cs.paddingLeft)||0)+(parseFloat(cs.paddingRight)||0)):0;
+  const availW=Math.min((((wrap&&wrap.clientWidth)||W)-pad), 960);
   const availH=Math.max(150,(window.innerHeight||600)-110);
   let s=Math.floor(availW/W);
   if(s>=1&&s*H>availH)s=Math.max(1,Math.floor(availH/H));
