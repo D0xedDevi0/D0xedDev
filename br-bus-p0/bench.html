@@ -328,11 +328,18 @@ function render(){
   ptext(BX+70,BY+BH+26,'SENSORS '+lit+'/'+sen+(last&&last.solved?'  - SOLVED':'') ,last&&last.solved?P.green:P.wood);
   /* panel */
   r(PANX,PANY,PANW,WH-42,P.panel);r(PANX-1,PANY,1,WH-42,P.border);
-  const tm=wrap(puzzle().teach,14);
-  box(PANX+4,PANY+4,PANW-8,18+tm.length*9,P.white,P.border);
+  const statTop=SBY-58;
+  let tm=null,bh=0;
+  for(const wdt of [14,18,24,32]){
+    const t=wrap(puzzle().teach,wdt), h=18+t.length*9;
+    if(144+h<=statTop){tm=t;bh=h;break;}
+  }
+  if(!tm){const t=wrap(puzzle().teach,32);const n=Math.max(1,((statTop-162)/9)|0);tm=t.slice(0,n);bh=18+tm.length*9;}
+  const partsTop=PANY+4+bh+6;
+  box(PANX+4,PANY+4,PANW-8,bh,P.white,P.border);
   ptext(PANX+8,PANY+8,'GOAL',P.ink);
   tm.forEach((line,i)=>ptext(PANX+8,PANY+20+i*9,line,P.wood));
-  let yy=PANY+30+tm.length*9;
+  let yy=partsTop;
   box(PANX+4,yy,PANW-8,26,P.white,P.border);
   ptext(PANX+8,yy+6,'PARTS '+mine.length,P.ink);
   r(PANX+8,yy+16,PANW-24,6,P.panel);
@@ -345,11 +352,11 @@ function render(){
   btn('next',PANX+4+(PANW-8)/2+2,yy,(PANW-8)/2-2,18,'panel','NEXT','ink');
   yy+=22;
   btn('reset',PANX+4,yy,PANW-8,16,'panel','CLEAR BOARD','ink');
-  ptext(PANX+6,PANY+164,'XP '+xp,P.ink);
-  ptext(PANX+6,PANY+176,'PAR '+par()+' PARTS',P.wood);
-  ptext(PANX+6,PANY+188,'BENCH '+(idx+1)+' OF 8',P.wood);
-  ptext(PANX+6,PANY+204,'CARE CAP 24',P.grey);
-  ptext(PANX+6,PANY+214,'XP PER DAY',P.grey);
+  ptext(PANX+6,statTop,'XP '+xp,P.ink);
+  ptext(PANX+6,statTop+12,'PAR '+par()+' PARTS',P.wood);
+  ptext(PANX+6,statTop+24,'BENCH '+(idx+1)+' OF 8',P.wood);
+  ptext(PANX+6,statTop+36,'CARE CAP 24',P.grey);
+  ptext(PANX+6,statTop+48,'XP PER DAY',P.grey);
   /* status */
   r(WX+2,SBY,WW-4,22,P.panel);r(WX+2,SBY,WW-4,1,P.border);
   const line=last?last.msg:'CLICK A PART, THEN CLICK THE GRID. PRESS RUN.';
